@@ -99,6 +99,8 @@ if __name__ == "__main__":
   priv_key, WIF, publ_key, h1601, publ_addr = get_key_w_seed(1337)
   #_, _, h1602, publ_addr2 = get_key_w_seed(1338)
   # bitcoincash:qrtuhdj5mdupd0lz0hdl67m6w7zj09tdlscvxnm8ga == 1Lg2KRDk6CWfy1K6vi7rVqtBYMYdBZvXu4
+
+  # public address
   publ_addr2 = "1Lg2KRDk6CWfy1K6vi7rVqtBYMYdBZvXu4"
   tmp = base58.b58decode(publ_addr2)
   assert checksum(tmp[0:-4]) == tmp[-4:]
@@ -109,15 +111,20 @@ if __name__ == "__main__":
 
   peers = socket.gethostbyname_ex('seed.bitcoinabc.org')[2]
   random.seed(time.time())
-  peer = random.choice(peers)
-  #peer = "39.108.100.122"
-  print(peer)
+  random.shuffle(peers)
 
-  sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-  sock.connect((peer, 8333))
+  for peer in peers:
+    try:
+      print(peer)
+      sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+      sock.connect((peer, 8333))
 
-  sock.send(getVersionMsg())
-  cmd, payload = recvMessage(sock)
+      sock.send(getVersionMsg())
+      cmd, payload = recvMessage(sock)
+      break
+    except ConnectionResetError:
+      continue
+
   cmd, payload = recvMessage(sock)
   sock.send(makeMessage(b'verack', b''))
   #cmd, payload = recvMessage(sock)
@@ -131,7 +138,9 @@ if __name__ == "__main__":
 
   #my_block = binascii.unhexlify('000000000000000001b9d2f1286800f49908901f6d2259d5c09f0ba7716a53b6')
   #my_block = binascii.unhexlify('000000000000000001c927311afbac4de2dab77e29cf1e47b259d2f87a7ccb0c')
-  my_block = binascii.unhexlify('000000000000000000d1494100edab34cad3560b27604873d9c9a11702c4ac5b')
+  #my_block = binascii.unhexlify('000000000000000000d1494100edab34cad3560b27604873d9c9a11702c4ac5b')
+  #my_block = binascii.unhexlify('000000000000000001de22647f93fdb3603c6fc072534a218e110302c2b19dc3')
+  my_block = binascii.unhexlify('000000000000000001de22647f93fdb3603c6fc072534a218e110302c2b19dc3')
   msg = makeMessage(b'getdata', struct.pack('<BL32s', 1, 2, my_block[::-1]))
 
   sock.send(msg)
@@ -142,16 +151,20 @@ if __name__ == "__main__":
   print(idx)
 
   # HACKS!!!!
-  #txn = payload[idx-0xc8+0x22:idx+0x3c]
-  txn = payload[idx-0xc8:idx+0x3c-0x22]
+  txn = payload[idx-0xc8+0x22+1:idx+0x3c]
+  #txn = payload[idx-0xc8:idx+0x3c-0x22]
   hexdump(txn)
-  print("SHOULD BE","d8e454302280e5ed1a3a1e7e89fcc6b63ca46ec3988fd29148a84fe9a4ee0aae")
-  print("SHOULD BE",shex(dbl256(txn)[::-1]))
+  #print("SHOULD BE","fce48731fb3d03084f97d42977b407683ab6e72827d2b65113bb319b45928b88")
+  #print("SHOULD BE","d8e454302280e5ed1a3a1e7e89fcc6b63ca46ec3988fd29148a84fe9a4ee0aae")
+  print("SHOULD BE","ce004d3bb163df52be5fcf1eed6551d287f47cb4c1d6cc2849d8f12ce7e17521")
+  print("ISISIS BE",shex(dbl256(txn)[::-1]))
+  print(shex(txn))
+  #exit(0)
 
   output_value = struct.unpack("<Q", payload[idx-4-8:idx-4])[0]
   output_script = payload[idx-3:idx+0x19-3]
 
-  print(output_value)
+  print("output value:", output_value)
   hexdump(output_script)
 
   """
@@ -183,7 +196,7 @@ if __name__ == "__main__":
     # input
     raw_tx += b"\x01"
     raw_tx += dbl256(txn) #[::-1]
-    raw_tx += struct.pack("<L", 1)  # output index
+    raw_tx += struct.pack("<L", 0)  # output index
     raw_tx += bytes([len(output_script)])
     raw_tx += output_script
     raw_tx += b"\xff\xff\xff\xff"
@@ -199,9 +212,13 @@ if __name__ == "__main__":
     assert len(x) < 0xfd
     return bytes([len(x)]) + x
 
-  raw_tx = make_raw_tx(txn, output_script, output_value-243, h1602) + b"\x41\x00\x00\x00"
+  FEE = 5000
+  raw_tx = make_raw_tx(txn, output_script, output_value-FEE, h1602) + b"\x41\x00\x00\x00"
   hexdump(raw_tx)
   print(shex(raw_tx))
+  print(shex(h1601))
+  hexdump(output_script)
+  #exit(0)
 
   s256 = dbl256(raw_tx)
   sk = ecdsa.SigningKey.from_string(priv_key, curve=ecdsa.SECP256k1)
@@ -218,7 +235,7 @@ if __name__ == "__main__":
 
   hexdump(sig)
   scriptSig = varstr(sig + b'\x41') + varstr(publ_key)
-  real_raw_tx = make_raw_tx(txn, scriptSig, output_value-243, h1602)
+  real_raw_tx = make_raw_tx(txn, scriptSig, output_value-FEE, h1602)
 
   hexdump(real_raw_tx)
   print(shex(real_raw_tx))

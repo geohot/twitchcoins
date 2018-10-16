@@ -24,6 +24,9 @@ def shex(x):
 def dbl256(x):
   return hashlib.sha256(hashlib.sha256(x).digest()).digest()
 
+def sha256(x):
+  return hashlib.sha256(x).digest()
+
 def checksum(x):
   return dbl256(x)[:4]
 
@@ -154,6 +157,7 @@ if __name__ == "__main__":
   txn = payload[idx-0xc8+0x22+1:idx+0x3c]
   #txn = payload[idx-0xc8:idx+0x3c-0x22]
   hexdump(txn)
+  #exit(0)
   #print("SHOULD BE","fce48731fb3d03084f97d42977b407683ab6e72827d2b65113bb319b45928b88")
   #print("SHOULD BE","d8e454302280e5ed1a3a1e7e89fcc6b63ca46ec3988fd29148a84fe9a4ee0aae")
   print("SHOULD BE","ce004d3bb163df52be5fcf1eed6551d287f47cb4c1d6cc2849d8f12ce7e17521")
@@ -168,26 +172,34 @@ if __name__ == "__main__":
   hexdump(output_script)
 
   """
-  00000000: 02 74 78 10 47 6D 61 6E  64 61 74 6F 72 79 2D 73  .tx.Gmandatory-s
-  00000010: 63 72 69 70 74 2D 76 65  72 69 66 79 2D 66 6C 61  cript-verify-fla
-  00000020: 67 2D 66 61 69 6C 65 64  20 28 53 69 67 6E 61 74  g-failed (Signat
-  00000030: 75 72 65 20 6D 75 73 74  20 75 73 65 20 53 49 47  ure must use SIG
-  00000040: 48 41 53 48 5F 46 4F 52  4B 49 44 29 C1 DE EC 2A  HASH_FORKID)...*
-  00000050: E0 0E 5D F3 1B 17 9E 57  9E 17 3B 01 6C 32 F9 F2  ..]....W..;.l2..
-  00000060: DB 7E 54 E7 F4 C1 86 9D  22 15 8E D2              .~T....."...
+  01 00 00 00
+  01
+  73 7A 51 1B 50 12 61 77 06 DA 08 52 A0 18 98 36
+  5F E6 7B 36 75 1E 52 05 43 67 72 22 EE EA A9 25
+  32 00 00 00 <-- outpoint
+  
+  6A 47 30 44 02 20 01
+  DA 0C 13 F8 57 95 45 BD  B0 35 62 DE A0 C1 45 4F  ....W.E..5b...EO
+  61 71 A7 0A 48 0F DF FD  E8 56 7F 4F 97 0A 29 02  aq..H....V.O..).
+  20 3B 8A D5 8F 87 19 83  F8 26 ED AA 6E 54 46 BE   ;.......&..nTF.
+  AC E5 D8 8C 9B F9 3A A6  85 E3 5A 8F C5 6E B1 7A  ......:...Z..n.z
+  8B 41
+
+  21
+  03 8E 36 9A 1F EB 36 7C 7F 72 AA B9 DF 0A 2B 9D 8B 1D D5 3A 07 35 90 EA 83 80 95 30 22 7B A1 66 C4
+
+  FF FF FF FF
+  02
+  44 0A 02 00 00 00 00 00
+  19 76 A9 14 E2 17 22 62 EA E7 88 09 50 01 2C B2 8A 5E 98 C1 F8 5D 44  AE 88 AC
+  31 02 00 00 00 00 00 00
+  19 76 A9 14 CD B2 39 FC E9 22 15 C4 E7 FF E7 A2 63 AA DE 9B 5F 97 E8 8C 88 AC
+  00 00 00 00     
   """
 
-  """
-  00000000: 02 74 78 10 61 6D 61 6E  64 61 74 6F 72 79 2D 73  .tx.amandatory-s
-  00000010: 63 72 69 70 74 2D 76 65  72 69 66 79 2D 66 6C 61  cript-verify-fla
-  00000020: 67 2D 66 61 69 6C 65 64  20 28 53 69 67 6E 61 74  g-failed (Signat
-  00000030: 75 72 65 20 6D 75 73 74  20 62 65 20 7A 65 72 6F  ure must be zero
-  00000040: 20 66 6F 72 20 66 61 69  6C 65 64 20 43 48 45 43   for failed CHEC
-  00000050: 4B 28 4D 55 4C 54 49 29  53 49 47 20 6F 70 65 72  K(MULTI)SIG oper
-  00000060: 61 74 69 6F 6E 29 8A 33  5B 75 59 9F 06 95 0B 51  ation).3[uY....Q
-  00000070: 82 85 0D 26 D1 98 B3 CD  6C 7E 1B 86 10 F3 06 42  ...&....l~.....B
-  00000080: 34 9E E9 74 15 F0                                 4..t..
-  """
+  def varstr(x):
+    assert len(x) < 0xfd
+    return bytes([len(x)]) + x
 
   def make_raw_tx(txn, output_script, output_value, h1602):
     print("making raw tx with len: %x" % len(output_script))
@@ -195,30 +207,60 @@ if __name__ == "__main__":
 
     # input
     raw_tx += b"\x01"
-    raw_tx += dbl256(txn) #[::-1]
-    raw_tx += struct.pack("<L", 0)  # output index
-    raw_tx += bytes([len(output_script)])
-    raw_tx += output_script
+    raw_tx += dbl256(txn) + struct.pack("<L", 0)   # outpoint
+    raw_tx += varstr(output_script)
     raw_tx += b"\xff\xff\xff\xff"
 
     # output
     raw_tx += b"\x01"
     raw_tx += struct.pack("<Q", output_value)
-    raw_tx += b"\x19" + b"\x76\xa9\x14" + h1602 + b"\x88\xac"
+    raw_tx += varstr(b"\x76\xa9\x14" + h1602 + b"\x88\xac")
+
+    # nLockTime
     raw_tx += b"\x00\x00\x00\x00"
     return raw_tx
 
-  def varstr(x):
-    assert len(x) < 0xfd
-    return bytes([len(x)]) + x
+  def fake_raw_tx(txn, output_script, output_value, h1602):
+    raw_tx = struct.pack("<L", 1)  # version
 
-  FEE = 5000
-  raw_tx = make_raw_tx(txn, output_script, output_value-FEE, h1602) + b"\x41\x00\x00\x00"
+    prevout = dbl256(txn) + struct.pack("<L", 0)   # outpoint
+    nSequence = b"\xff\xff\xff\xff"
+    scriptPubkey = varstr(b"\x76\xa9\x14" + h1602 + b"\x88\xac")
+
+    # TODO: hashPrevouts
+    raw_tx += dbl256(prevout)
+
+    # TODO: hashSequence
+    raw_tx += dbl256(nSequence)
+
+    # outpoint
+    raw_tx += prevout
+
+    # scriptCode
+    raw_tx += varstr(output_script)
+
+    # value
+    raw_tx += struct.pack("<Q", output_value)
+
+    # nSequence
+    raw_tx += nSequence
+
+    # TODO: hashOutputs
+    raw_tx += dbl256(struct.pack("<Q", output_value) + scriptPubkey)
+
+    # nLockTime
+    raw_tx += b"\x00\x00\x00\x00"
+
+    # sighash type
+    raw_tx += b"\x41\x00\x00\x00"
+    return raw_tx
+
+  FEE = 500
+  raw_tx = fake_raw_tx(txn, output_script, output_value-FEE, h1602)
   hexdump(raw_tx)
   print(shex(raw_tx))
   print(shex(h1601))
   hexdump(output_script)
-  #exit(0)
 
   s256 = dbl256(raw_tx)
   sk = ecdsa.SigningKey.from_string(priv_key, curve=ecdsa.SECP256k1)
@@ -244,75 +286,4 @@ if __name__ == "__main__":
   sock.send(makeMessage(b'tx', real_raw_tx))
   while 1:
     cmd, payload = recvMessage(sock)
-
-  exit(0)
-
-  #pubKey = keyUtils.privateKeyToPublicKey(privateKey)
-  #scriptSig = utils.varstr(sig).encode('hex') + utils.varstr(pubKey.decode('hex')).encode('hex')
-  #signed_txn = makeRawTransaction(outputTransactionHash, sourceIndex, scriptSig, outputs)
-  #verifyTxnSignature(signed_txn)
-  #dbl256(raw_tx)
-
-  txes = payload[4+32+32+4+4+4:]
-  #ptr = 3
-  #for i in range(0x27d):
-  #hexdump(txes[0:0x100])
-
-  #idx = payload.find(binascii.unhexlify('8b0dd64c5cab786be66669545032ab20295c64da1b302dda224d4bb742fd0c53')[::-1])
-  #print(idx)
-
-  #exit(0)
-
-  # question, how do I query the address
-  print("will query %s" % publ_addr)
-
-  """
-  01000000
-  01
-  tx_in:
-  8b0dd64c5cab786be66669545032ab20295c64da1b302dda224d4bb742fd0c53
-  01000000
-  19
-  76a914010966776006953d5567439e5e39f86a0d273bee88ac
-  ffffffff
-
-  01
-  tx_out:
-  605af40500000000
-  19
-  76a914097072524438d003d23a2f23edb65aae1bb3e46988ac
-
-  00000000
-  01000000
-  """
-
-  raw_tx = struct.pack("<L", 1)  # version
-  raw_tx += b"\x01"
-  raw_tx += binascii.unhexlify("8b0dd64c5cab786be66669545032ab20295c64da1b302dda224d4bb742fd0c53")
-  raw_tx += struct.pack("<L", 1)  # output index
-
-
-
-  """
-
-
-  txmsg = getTxMsg(b'', b'')
-  hexdump(txmsg)
-  exit(0)
-  """
-
-  #sock.send(getVersionMsg())
-  # f9beb4d9676574626c6f636b73000000450000008634d5ae0100000001
-  # 000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f
-  # 0000000000000000000000000000000000000000000000000000000000000000
-  #msg = makeMessage(b'getheaders', struct.pack('<LB32s32s', 70014, 1, genesis_block, b"\x00"*32))
-  print("sent verack")
-
-  #hexdump(sock.recv(1024))
-
-
-  #sock.send(getVersionMsg())
-  #cmd, payload = recvMessage(sock)
-
-
 

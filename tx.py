@@ -11,6 +11,12 @@ import qrcode
 img = qrcode.make(publ_addr)
 img.save("coin.png")
 """
+def derSigToHexSig(s):
+  s, junk = ecdsa.der.remove_sequence(s)
+  assert(junk == b'')
+  x, s = ecdsa.der.remove_integer(s)
+  y, s = ecdsa.der.remove_integer(s)
+  return binascii.unhexlify(('%064x%064x' % (x, y)))
 
 def shex(x):
   return binascii.hexlify(x).decode()
@@ -114,28 +120,32 @@ if __name__ == "__main__":
   cmd, payload = recvMessage(sock)
   cmd, payload = recvMessage(sock)
   sock.send(makeMessage(b'verack', b''))
-  cmd, payload = recvMessage(sock)
-  cmd, payload = recvMessage(sock)
-  cmd, payload = recvMessage(sock)
-  cmd, payload = recvMessage(sock)
-  cmd, payload = recvMessage(sock)
+  #cmd, payload = recvMessage(sock)
+  #cmd, payload = recvMessage(sock)
+  #cmd, payload = recvMessage(sock)
+  #cmd, payload = recvMessage(sock)
+  #cmd, payload = recvMessage(sock)
 
   #genesis_block = binascii.unhexlify('000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f')
   #msg = makeMessage(b'getblocks', struct.pack('<LB32s32s', 70014, 1, genesis_block, b"\x00"*32))
 
   #my_block = binascii.unhexlify('000000000000000001b9d2f1286800f49908901f6d2259d5c09f0ba7716a53b6')
-  my_block = binascii.unhexlify('000000000000000001c927311afbac4de2dab77e29cf1e47b259d2f87a7ccb0c')
+  #my_block = binascii.unhexlify('000000000000000001c927311afbac4de2dab77e29cf1e47b259d2f87a7ccb0c')
+  my_block = binascii.unhexlify('000000000000000000d1494100edab34cad3560b27604873d9c9a11702c4ac5b')
   msg = makeMessage(b'getdata', struct.pack('<BL32s', 1, 2, my_block[::-1]))
 
   sock.send(msg)
-  cmd, payload = recvMessage(sock)
+  cmd = b""
+  while not cmd.decode().startswith("block"):
+    cmd, payload = recvMessage(sock)
   idx = payload.find(h1601)
   print(idx)
 
   # HACKS!!!!
-  txn = payload[idx-0xc8+0x22:idx+0x3c]
+  #txn = payload[idx-0xc8+0x22:idx+0x3c]
+  txn = payload[idx-0xc8:idx+0x3c-0x22]
   hexdump(txn)
-  print("SHOULD BE","a692bf4900c3474d3d7cfc9f824cdfcaff7bd0f7914f8ed8f43f8ebf31f71420")
+  print("SHOULD BE","d8e454302280e5ed1a3a1e7e89fcc6b63ca46ec3988fd29148a84fe9a4ee0aae")
   print("SHOULD BE",shex(dbl256(txn)[::-1]))
 
   output_value = struct.unpack("<Q", payload[idx-4-8:idx-4])[0]
@@ -173,14 +183,14 @@ if __name__ == "__main__":
     # input
     raw_tx += b"\x01"
     raw_tx += dbl256(txn) #[::-1]
-    raw_tx += struct.pack("<L", 0)  # output index
+    raw_tx += struct.pack("<L", 1)  # output index
     raw_tx += bytes([len(output_script)])
     raw_tx += output_script
     raw_tx += b"\xff\xff\xff\xff"
 
     # output
     raw_tx += b"\x01"
-    raw_tx += struct.pack("<Q", output_value-243)
+    raw_tx += struct.pack("<Q", output_value)
     raw_tx += b"\x19" + b"\x76\xa9\x14" + h1602 + b"\x88\xac"
     raw_tx += b"\x00\x00\x00\x00"
     return raw_tx
@@ -189,15 +199,30 @@ if __name__ == "__main__":
     assert len(x) < 0xfd
     return bytes([len(x)]) + x
 
-  raw_tx = make_raw_tx(txn, output_script, output_value, h1602) + b"\x41\x00\x00\x00"
+  raw_tx = make_raw_tx(txn, output_script, output_value-243, h1602) + b"\x41\x00\x00\x00"
   hexdump(raw_tx)
+  print(shex(raw_tx))
 
+  s256 = dbl256(raw_tx)
   sk = ecdsa.SigningKey.from_string(priv_key, curve=ecdsa.SECP256k1)
   # 0x40 = SIGHASH_FORKID + 0x1 = SIGHASH_ALL
-  sig = sk.sign_digest(dbl256(raw_tx), sigencode=ecdsa.util.sigencode_der) + b"\x01" # 01 is hashtype
-  scriptSig = varstr(sig) + varstr(publ_key)
-  real_raw_tx = make_raw_tx(txn, scriptSig, output_value, h1602)
+  while 1:
+    print("signing")
+    sig = sk.sign_digest(s256, sigencode=ecdsa.util.sigencode_der)
+    vk = ecdsa.VerifyingKey.from_string(publ_key[1:], curve=ecdsa.SECP256k1)
+    assert(vk.verify_digest(derSigToHexSig(sig), s256))
+    N = 115792089237316195423570985008687907852837564279074904382605163141518161494337
+    r, s = ecdsa.util.sigdecode_der(sig, sk.curve.generator.order())
+    if s < N/2:
+      break
+
+  hexdump(sig)
+  scriptSig = varstr(sig + b'\x41') + varstr(publ_key)
+  real_raw_tx = make_raw_tx(txn, scriptSig, output_value-243, h1602)
+
   hexdump(real_raw_tx)
+  print(shex(real_raw_tx))
+  #exit(0)
 
   sock.send(makeMessage(b'tx', real_raw_tx))
   while 1:

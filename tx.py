@@ -314,25 +314,6 @@ if __name__ == "__main__":
     raw_tx += b"\x41\x00\x00\x00"
     return raw_tx
 
-  # testing, validate existing sig
-  """
-  dat = Data(input_script)
-  sig = dat.consume(dat.get_varint())
-  cpubl_key = dat.consume(dat.get_varint())
-  publ_key = uncompress_publ_key(cpubl_key)
-  vk = ecdsa.VerifyingKey.from_string(publ_key[1:], curve=ecdsa.SECP256k1)
-
-  print(shex(input_outpoint))
-  print(hex(input_sequence))
-  raw_tx = fake_raw_tx(input_outpoint, scriptPubkey_sent, output_value, output_script)
-  hexdump(raw_tx)
-  s256 = dbl256(raw_tx)
-  print(shex(s256))
-  vk.verify_digest(derSigToHexSig(sig[:-1]), s256)
-  print("GOODO!!!")
-  exit(0)
-  """
-
   FEE = 500
   raw_tx = fake_raw_tx(outpoint, output_script, output_value, output_value-FEE, scriptPubkey)
 

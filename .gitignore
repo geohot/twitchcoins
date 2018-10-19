@@ -1,3 +1,5 @@
 bitcoin-abc
 .*.swp
 seekrit
+__pycache__
+bcache

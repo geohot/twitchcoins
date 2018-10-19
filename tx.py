@@ -61,14 +61,22 @@ def sign(sk, s256):
     r, s = ecdsa.util.sigdecode_der(sig, sk.curve.generator.order())
     if s < N/2:
       break
-  return s256
+  return sig
+
+def compress_publ_key(publ_key):
+  x = int(shex(publ_key[1:0x21]), 16)
+  y = int(shex(publ_key[0x21:]), 16)
+  if y & 1:
+    return b'\x03' + binascii.unhexlify(format(x, '064x'))
+  else:
+    return b'\x02' + binascii.unhexlify(format(x, '064x'))
 
 def uncompress_publ_key(publ_key):
   p = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
   x = int(shex(publ_key[1:0x21]), 16)
   y_square = (pow(x, 3, p) + 7) % p
   y_square_square_root = pow(y_square, (p+1)//4, p)
-  if y_square_square_root & 1:
+  if (publ_key[0] == 2 and y_square_square_root & 1) or (publ_key[0] == 3 and not y_square_square_root & 1):
     y = (-y_square_square_root) % p
   else:
     y = y_square_square_root
@@ -132,7 +140,9 @@ def recvMessage(sock):
 
 if __name__ == "__main__":
   priv_key, WIF, publ_key, h1601, publ_addr = priv_key_to_public(PRIV_KEY)
-  #uncompress_publ_key(publ_key)
+  hexdump(uncompress_publ_key(publ_key))
+  hexdump(publ_key)
+  assert uncompress_publ_key(compress_publ_key(publ_key)) == publ_key
 
   # public address
   publ_addr2 = "1Lg2KRDk6CWfy1K6vi7rVqtBYMYdBZvXu4"
@@ -146,6 +156,7 @@ if __name__ == "__main__":
 
   print("WE WILL SEND: %s -> %s" % (publ_addr, publ_addr2))
   print(shex(h1601))
+  print(shex(scriptPubkey_sent))
 
   """
   peers = socket.gethostbyname_ex('seed.bitcoinabc.org')[2]
@@ -247,16 +258,18 @@ if __name__ == "__main__":
   outpoint = dbl256(txn) + struct.pack("<L", output_index)
   hexdump(outpoint)
 
-  def make_raw_tx(outpoint, output_script, output_value, scriptPubkey):
-    print("making raw tx with len: %x" % len(output_script))
+  def make_raw_tx(outpoint, scriptCode, output_value, scriptPubkey):
+    nSequence = b"\xff\xff\xff\xff"
+    nLockTime = b"\x00\x00\x00\x00"
+
     raw_tx = struct.pack("<L", 1)  # version
 
     # input count
     raw_tx += b"\x01"
     # input
     raw_tx += outpoint
-    raw_tx += varstr(output_script)
-    raw_tx += b"\xff\xff\xff\xff"
+    raw_tx += varstr(scriptCode)
+    raw_tx += nSequence
 
     # output count
     raw_tx += b"\x01"
@@ -265,12 +278,14 @@ if __name__ == "__main__":
     raw_tx += varstr(scriptPubkey)
 
     # nLockTime
-    raw_tx += b"\x00\x00\x00\x00"
+    raw_tx += nLockTime
     return raw_tx
 
   def fake_raw_tx(outpoint, scriptCode, output_value, scriptPubkey):
-    raw_tx = struct.pack("<L", 1)  # version
     nSequence = b"\xff\xff\xff\xff"
+    nLockTime = b"\x00\x00\x00\x00"
+
+    raw_tx = struct.pack("<L", 1)  # version
 
     # hashPrevouts (for all inputs)
     raw_tx += dbl256(outpoint)
@@ -294,45 +309,44 @@ if __name__ == "__main__":
     raw_tx += dbl256(struct.pack("<Q", output_value) + varstr(scriptPubkey))
 
     # nLockTime
-    raw_tx += b"\x00\x00\x00\x00"
+    raw_tx += nLockTime
 
     # sighash type
     raw_tx += b"\x41\x00\x00\x00"
     return raw_tx
 
   # testing, validate existing sig
+  """
   dat = Data(input_script)
   sig = dat.consume(dat.get_varint())
-  publ_key = uncompress_publ_key(dat.consume(dat.get_varint()))
+  cpubl_key = dat.consume(dat.get_varint())
+  publ_key = uncompress_publ_key(cpubl_key)
   vk = ecdsa.VerifyingKey.from_string(publ_key[1:], curve=ecdsa.SECP256k1)
 
+  print(shex(input_outpoint))
   print(hex(input_sequence))
   raw_tx = fake_raw_tx(input_outpoint, scriptPubkey_sent, output_value, output_script)
+  hexdump(raw_tx)
   s256 = dbl256(raw_tx)
+  print(shex(s256))
   vk.verify_digest(derSigToHexSig(sig[:-1]), s256)
-
+  print("GOODO!!!")
   exit(0)
+  """
 
   FEE = 500
-  raw_tx = fake_raw_tx(outpoint, output_value-FEE, scriptPubkey)
+  raw_tx = fake_raw_tx(outpoint, output_script, output_value-FEE, scriptPubkey)
 
-  #s256 = dbl256(raw_tx)
-  s256 = sha256(raw_tx)
-
+  s256 = dbl256(raw_tx)
   sk = ecdsa.SigningKey.from_string(priv_key, curve=ecdsa.SECP256k1)
   vk = ecdsa.VerifyingKey.from_string(publ_key[1:], curve=ecdsa.SECP256k1)
   sig = sign(sk, s256)
   vk.verify_digest(derSigToHexSig(sig), s256)
 
-  hexdump(sig)
-  hexdump(publ_key)
-  # 0x40 = SIGHASH_FORKID + 0x1 = SIGHASH_ALL
-  publ_key_compressed = b"\x02" + publ_key[1:0x21]
-  scriptSig = varstr(sig + b'\x41') + varstr(publ_key_compressed)
+  scriptSig = varstr(sig + b'\x41') + varstr(publ_key)
   hexdump(scriptSig)
 
   real_raw_tx = make_raw_tx(outpoint, scriptSig, output_value-FEE, scriptPubkey)
-
   print(shex(real_raw_tx))
   exit(0)
 

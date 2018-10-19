@@ -178,7 +178,8 @@ if __name__ == "__main__":
 
   # REPLACE WITH YOUR TX BLOCK
   #TX_BLOCK = "00000000000000000007a70ff954a0892d9367612993a8220af6c27ac3dbccfc"
-  TX_BLOCK = "0000000000000000015d3fc2aa182f86ce090d0acc3d53f2d6b7f617d17199b9"
+  #TX_BLOCK = "0000000000000000015d3fc2aa182f86ce090d0acc3d53f2d6b7f617d17199b9"
+  TX_BLOCK = "00000000000000000079cd3a4fbf12026113762c233bf19c5cfa711c28078e76"
 
   # request data about block tx is in
   msg = makeMessage(b'getdata', struct.pack('<BL32s', 1, 2, binascii.unhexlify(TX_BLOCK)[::-1]))
@@ -315,7 +316,10 @@ if __name__ == "__main__":
     raw_tx += b"\x41\x00\x00\x00"
     return raw_tx
 
-  FEE = 250
+  # anyone can spend?
+  scriptPubkey = b"\x6a\x4c" + varstr(b" GEORGE HOTZ SENT THIS LIVE ON TWITCH. twitch.tv/tomcr00s3  BITCOIN SCRIPT CHECK = STUPID, ETHEREUM SCRIPT = GOOD ")
+
+  FEE = 800
   raw_tx = fake_raw_tx(outpoint, output_script, output_value, output_value-FEE, scriptPubkey)
 
   s256 = dbl256(raw_tx)
@@ -329,10 +333,15 @@ if __name__ == "__main__":
   hexdump(scriptSig)
 
   real_raw_tx = make_raw_tx(outpoint, scriptSig, output_value-FEE, scriptPubkey)
+  hexdump(real_raw_tx)
   print("tx size: %d" % len(real_raw_tx))
   print(shex(real_raw_tx))
-  #exit(0)
 
+  if input("should send? (y/n): ") != "y":
+    print("NOT SEND")
+    exit(0)
+
+  print("OMG SENDDDD")
   sock.send(makeMessage(b'tx', real_raw_tx))
   while 1:
     cmd, payload = recvMessage(sock)

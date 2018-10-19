@@ -140,8 +140,7 @@ def recvMessage(sock):
 
 if __name__ == "__main__":
   priv_key, WIF, publ_key, h1601, publ_addr = priv_key_to_public(PRIV_KEY)
-  hexdump(uncompress_publ_key(publ_key))
-  hexdump(publ_key)
+  print(shex(publ_key))
   assert uncompress_publ_key(compress_publ_key(publ_key)) == publ_key
 
   # public address
@@ -281,7 +280,7 @@ if __name__ == "__main__":
     raw_tx += nLockTime
     return raw_tx
 
-  def fake_raw_tx(outpoint, scriptCode, output_value, scriptPubkey):
+  def fake_raw_tx(outpoint, scriptCode, input_value, output_value, scriptPubkey):
     nSequence = b"\xff\xff\xff\xff"
     nLockTime = b"\x00\x00\x00\x00"
 
@@ -300,7 +299,7 @@ if __name__ == "__main__":
     raw_tx += varstr(scriptCode)
 
     # value
-    raw_tx += struct.pack("<Q", output_value)
+    raw_tx += struct.pack("<Q", input_value)
 
     # nSequence
     raw_tx += nSequence
@@ -335,7 +334,7 @@ if __name__ == "__main__":
   """
 
   FEE = 500
-  raw_tx = fake_raw_tx(outpoint, output_script, output_value-FEE, scriptPubkey)
+  raw_tx = fake_raw_tx(outpoint, output_script, output_value, output_value-FEE, scriptPubkey)
 
   s256 = dbl256(raw_tx)
   sk = ecdsa.SigningKey.from_string(priv_key, curve=ecdsa.SECP256k1)

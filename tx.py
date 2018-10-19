@@ -6,11 +6,14 @@ import socket
 import time
 from hexdump import hexdump
 
-"""
-import qrcode
-img = qrcode.make(publ_addr)
-img.save("coin.png")
-"""
+
+# **** helpers ****
+
+def make_qrcode(publ_addr):
+  import qrcode
+  img = qrcode.make(publ_addr)
+  img.save("newcoin.png")
+
 def derSigToHexSig(s):
   s, junk = ecdsa.der.remove_sequence(s)
   assert(junk == b'')
@@ -38,11 +41,8 @@ def ripemd160(x):
   d.update(x)
   return d
 
-def get_key_w_seed(seed=1337):
-  # generate private key
-  random.seed(seed)
-  priv_key = bytes([random.randint(0, 255) for x in range(32)])
-
+# priv_key should just be 32 random bytes
+def priv_key_to_public(priv_key):
   # priv_key -> WIF
   WIF = b58wchecksum(b"\x80" + priv_key)
 
@@ -53,6 +53,13 @@ def get_key_w_seed(seed=1337):
   hash160 = ripemd160(hashlib.sha256(publ_key).digest()).digest()
   publ_addr = b58wchecksum(b"\x00" + hash160)
   return priv_key, WIF, publ_key, hash160, publ_addr
+
+PRIV_KEY = open("seekrit", "rb").read()
+_, _, _, _, addr = priv_key_to_public(PRIV_KEY)
+print(addr)
+make_qrcode(addr)
+
+# **** cashes ****
 
 # bitcoin cash magic
 MAGIC_CASH = 0xe8f3e1e3
@@ -102,6 +109,7 @@ if __name__ == "__main__":
   priv_key, WIF, publ_key, h1601, publ_addr = get_key_w_seed(1337)
   #_, _, h1602, publ_addr2 = get_key_w_seed(1338)
   # bitcoincash:qrtuhdj5mdupd0lz0hdl67m6w7zj09tdlscvxnm8ga == 1Lg2KRDk6CWfy1K6vi7rVqtBYMYdBZvXu4
+
 
   # public address
   publ_addr2 = "1Lg2KRDk6CWfy1K6vi7rVqtBYMYdBZvXu4"

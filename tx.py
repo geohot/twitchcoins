@@ -157,7 +157,6 @@ if __name__ == "__main__":
   print(shex(h1601))
   print(shex(scriptPubkey_sent))
 
-  """
   peers = socket.gethostbyname_ex('seed.bitcoinabc.org')[2]
   random.seed(time.time())
   random.shuffle(peers)
@@ -178,7 +177,8 @@ if __name__ == "__main__":
   sock.send(makeMessage(b'verack', b''))
 
   # REPLACE WITH YOUR TX BLOCK
-  TX_BLOCK = "00000000000000000007a70ff954a0892d9367612993a8220af6c27ac3dbccfc"
+  #TX_BLOCK = "00000000000000000007a70ff954a0892d9367612993a8220af6c27ac3dbccfc"
+  TX_BLOCK = "0000000000000000015d3fc2aa182f86ce090d0acc3d53f2d6b7f617d17199b9"
 
   # request data about block tx is in
   msg = makeMessage(b'getdata', struct.pack('<BL32s', 1, 2, binascii.unhexlify(TX_BLOCK)[::-1]))
@@ -188,11 +188,12 @@ if __name__ == "__main__":
   while not cmd.decode().startswith("block"):
     cmd, payload = recvMessage(sock)
 
+  """
   f = open("bcache", "wb")
   f.write(payload)
   f.close()
-  """
   payload = open("bcache", "rb").read()
+  """
 
   # parse the block
   print(len(payload))
@@ -314,7 +315,7 @@ if __name__ == "__main__":
     raw_tx += b"\x41\x00\x00\x00"
     return raw_tx
 
-  FEE = 500
+  FEE = 250
   raw_tx = fake_raw_tx(outpoint, output_script, output_value, output_value-FEE, scriptPubkey)
 
   s256 = dbl256(raw_tx)
@@ -323,12 +324,14 @@ if __name__ == "__main__":
   sig = sign(sk, s256)
   vk.verify_digest(derSigToHexSig(sig), s256)
 
+  #scriptSig = varstr(sig + b'\x41') + varstr(compress_publ_key(publ_key))
   scriptSig = varstr(sig + b'\x41') + varstr(publ_key)
   hexdump(scriptSig)
 
   real_raw_tx = make_raw_tx(outpoint, scriptSig, output_value-FEE, scriptPubkey)
+  print("tx size: %d" % len(real_raw_tx))
   print(shex(real_raw_tx))
-  exit(0)
+  #exit(0)
 
   sock.send(makeMessage(b'tx', real_raw_tx))
   while 1:
